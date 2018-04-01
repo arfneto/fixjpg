@@ -2,6 +2,7 @@
 
 #include "stdafx.h"
 #include <inttypes.h>
+#include <list>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -9,14 +10,11 @@
 #include <string>
 #include <memory>
 #include <inttypes.h>
+#include "IFDlist.h"
 
 using namespace std;
 
 #define		__BUFFER0JPEG__		65536
-
-
-
-
 
 struct fileHeader
 {
@@ -56,32 +54,6 @@ struct EXIF
 
 };
 
-struct IFDfield
-{
-	uint16_t	tag;
-	uint16_t	type;
-	uint32_t	count;
-	uint32_t	offset;
-};
-
-struct IFD
-{
-	uint32_t			address;
-	uint16_t			entries;
-	uint32_t			nextIFD;
-	vector<IFDfield>	ifdEntry;
-};
-
-struct IFDVector
-{
-	short		scanning;
-	uint32_t	offsetBase;
-	vector<IFD>	ifd;
-};
-
-
-
-
 class TIFFfile
 {
 public:
@@ -98,11 +70,13 @@ public:
 
 	void dumpFrom(const char * title, const short l, const unsigned char * buf) const;
 
-	void dumpIFDset(IFDVector *);
+	void dumpIFDset(IFDlist *);
 
 	void fileLoad();
 
 	void fileStatus();
+
+	IFD * getNewIFD(uint32_t);
 
 	void logThis(fileLog);
 	void logThis(fileLog l, string comment);
@@ -113,6 +87,8 @@ public:
 		 uint32_t, 
 		 uint16_t,
 		 uint16_t);
+
+	void testList();
 
 private:
 
@@ -140,8 +116,15 @@ private:
 	vector<fileLog>		log;	// reader history
 	JFIF				jfif;
 	EXIF				exif;
-	vector<IFD>			ifd;	// all IFDs
-	IFDVector			ifdSet;
+
+	IFDlist				ifdSet;
+	IFD *				pIFD;
+	IFD *				currentIFD;
+	short				ifdIndex{-1};
+
+	uint16_t		b16{};
+	uint32_t		b32{};
+	uint64_t		b64{};
 
 	bool				lsbFirst;
 };
