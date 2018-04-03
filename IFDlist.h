@@ -1,8 +1,13 @@
 #pragma once
-#include <inttypes.h>
-#include <list>
 #include "stdafx.h"
-
+#include <inttypes.h>
+#include <iostream>
+#include <list>
+#include <vector>
+#include <fstream>
+#include <cstdint>
+#include <string>
+#include <memory>
 using namespace std;
 
 struct IFDfield
@@ -11,7 +16,7 @@ struct IFDfield
 	uint16_t	type;
 	uint32_t	count;
 	uint32_t	offset;
-	IFDfield *	next;
+	IFDfield *	nextField;
 };
 
 struct IFD
@@ -22,22 +27,25 @@ struct IFD
 	short				index;
 	uint32_t			nextIFDoffset;
 	bool				processed;
+	IFD *				nextIFD;
+	IFDfield *			lastField;
 
-	IFD *				next;
+};
 
-}; class IFDlist
+class IFDlist
 {
 public:
 
-	uint32_t	offsetBase;
-	short		ifdCount;
 	IFD *		ifd;
+	short		ifdCount;
+	uint32_t	offsetBase;
+	IFD *		lastIFD;
 
 	IFDlist();
 	~IFDlist();
 
-	void insertField(IFDfield *, IFD *);
+	IFDfield * insertField( IFDfield, IFD *);
 
-	IFD * insertIFD( IFD * i, IFDlist * s );	// insert an IFD at the end of the list
+	IFD * insertIFD( IFD i, IFDlist * s );	// insert an IFD at the end of the list
 };
 

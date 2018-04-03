@@ -76,7 +76,7 @@ public:
 
 	void fileStatus();
 
-	IFD * getNewIFD(uint32_t);
+	IFD * getNewIFD(IFDlist *, uint32_t);
 
 	void logThis(fileLog);
 	void logThis(fileLog l, string comment);
@@ -88,7 +88,11 @@ public:
 		 uint16_t,
 		 uint16_t);
 
-	void testList();
+	void testList(IFDlist *);
+
+	void updateHighestOffset(uint32_t);
+
+	IFDlist				ifdSet;
 
 private:
 
@@ -96,10 +100,11 @@ private:
 	unsigned char		buffer[__BUFFER0JPEG__];
 
 	uint32_t	next{};
+	uint32_t	lastAccessed{};
+	uint32_t	highestAccessed{};
+
 	uint32_t	bufSize;
 
-	long		lastAccessed{ 0 };
-	long		highestAccessed{ 0 };
 
 	int			status;
 	int			ignored;
@@ -117,10 +122,8 @@ private:
 	JFIF				jfif;
 	EXIF				exif;
 
-	IFDlist				ifdSet;
 	IFD *				pIFD;
 	IFD *				currentIFD;
-	short				ifdIndex{-1};
 
 	uint16_t		b16{};
 	uint32_t		b32{};

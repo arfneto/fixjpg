@@ -4,29 +4,18 @@
 
 IFDlist::IFDlist()
 {
-	//struct IFD
-	//{
-	//	uint32_t			address;
-	//	uint16_t			entries;
-	//	IFDfield *			fieldList;
-	//	short				index;
-	//	uint32_t			nextIFDoffset;
-	//	bool				processed;
-
-	//	IFD *				next;
-	//};
-
-	offsetBase = -1;
+	offsetBase = 0;
 	ifdCount = 0;
-	ifd = new(IFD);
 
+	ifd = (IFD *)::operator new(sizeof(IFD));
 	ifd->address = -1;
 	ifd->entries = 0;
 	ifd->fieldList = nullptr;
 	ifd->index = -1;
-	ifd->nextIFDoffset = -1;
+	ifd->lastField = nullptr;
+	ifd->nextIFD = nullptr;
+	ifd->nextIFDoffset = 0;
 	ifd->processed = false;
-	ifd->next = nullptr;
 }
 
 
@@ -38,66 +27,65 @@ IFDlist::~IFDlist()
 
 
 
-void IFDlist::insertField(
-	IFDfield * f,
+IFDfield * IFDlist::insertField(
+	IFDfield field,
 	IFD * pIFD
 )
 {
+	IFDfield * f = (IFDfield *)::operator new(sizeof(IFDfield));
+	*f = field;
+
 	// insert a field *f into field array *pIFD
-	f->next = nullptr;	// just to be sure
+	f->nextField = nullptr;	// just to be sure
 	if ( pIFD->fieldList == nullptr )
 	{
 		// first field
-		printf(
-			"\tinsertField: first field inserted\n"
-		);
 		pIFD->fieldList = f;
 		pIFD->entries = 1;
-		return;
+		pIFD->lastField = f;
 	}
-	// points to head
-	IFDfield * p = pIFD->fieldList;
-	// navigate to end
-	while (p->next != nullptr)
+	else
 	{
-		p = p->next;
-	};
-	// now insert
-	p->next = f;
-	pIFD->entries += 1;
-	printf(
-		"\tinsertIFD: %dth item inserted\n",
-		pIFD->entries
-	);
-	return;
-};	// end insertIFD()
+		// 
+		// lastField points to tail: just link this new one
+		//
+		IFDfield * p = pIFD->lastField;
+		p->nextField = f;
+		pIFD->lastField = f;
+		pIFD->entries = pIFD->entries + 1;
+	}
+	return f;
+};	// end insertIield()
 
 
 
 
 
 IFD * IFDlist::insertIFD(
-	IFD * f,
+	IFD ifd,
 	IFDlist * s
 )
 {
-	f->fieldList = nullptr;
+	IFD * f = (IFD *)::operator new(sizeof(IFD));
+	*f = ifd;
 
+	f->nextIFD = nullptr;	// this will be the last	
 	if (s->ifd == nullptr)
 	{
 		// first ifd
 		s->ifdCount = 1;
 		s->ifd = f;
-		return f;
+		s->ifd->index = s->ifdCount - 1;	// first IFD is IFD0
+		s->lastIFD = f;
 	}
-	// point p to head
-	IFD * p = s->ifd;
-	while (p->next != nullptr)
+	else
 	{
-		p = p->next;
-	};
-	// now points to end
-	p->next = f;
-	s->ifdCount += 1;
-	return p;
+		// not the first. Use pointer lastIFD
+		IFD * p = s->lastIFD;
+		p->nextIFD = f;
+		s->ifdCount = s->ifdCount + 1;
+		f->index = s->ifdCount - 1;
+		s->lastIFD = f;
+	}
+	return f;
 };	// end insertIFD()
