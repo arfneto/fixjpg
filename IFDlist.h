@@ -28,6 +28,7 @@ struct IFD
 	uint32_t			nextIFDoffset;
 	bool				processed;
 	IFD *				nextIFD;
+	uint16_t			origin; // 0x8769 0xA005 for indicating non-linked IFD
 	IFDfield *			lastField;
 
 };

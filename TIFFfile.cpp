@@ -85,7 +85,7 @@ void TIFFfile::dumpAPP0(int address)
 void TIFFfile::dumpEXIF(int address)
 {
 	printf("\tdumpEXIF: APP1 address is 0x%X\n", address);
-	printf("\tIdentifier is %s\n", exif.identifier);
+	printf("\tIdentifier is '%s'\n", exif.identifier);
 	printf("\tByte Order: 0x%04X\n", exif.endian);
 	if (exif.endian = 0x4949)
 	{
@@ -240,10 +240,9 @@ void TIFFfile::fileLoad()
 
 	IFDfield *		pField;
 
-	IFDfield		tempField;
 	int				n{};
 	char			sMsg[80];
-	char			sValue[80];
+	//char			sValue[80];
 
 	uint16_t		nIFD{};
 	uint16_t		nEntries{};
@@ -336,13 +335,13 @@ void TIFFfile::fileLoad()
 				lastAccessed = next - 1;
 				if (lastAccessed > highestAccessed)	{	highestAccessed = lastAccessed;	};
 				logThis(
-					{ "[FFD8]", next-2, 2, "SOI - start of image"	}, ""
+					{ "FFD8", next-2, 2, "SOI - start of image"	}, ""
 				);
 				st = 0;
 				break;
 			case 0xD9:
 				printf("\tEOI image at 0x%X\n", segmentStart);
-				sprintf_s(sMsg, "[FF%X]", nAPP);
+				sprintf_s(sMsg, "FF%X", nAPP);
 				jpgEnd = true;
 				logThis(
 					{ sMsg, base, (next - base - 2), "EOI - End of Image (or thumbnail)" }, ""
@@ -408,7 +407,7 @@ void TIFFfile::fileLoad()
 			case 0xC0:	// SOF
 				printf("\t[FFC0]\n");
 				printf("\t[FF%X] segment lentgh is %d (0x%04X) bytes\n", nAPP, len, len);
-				sprintf_s(sMsg, "[FF%X]", nAPP);
+				sprintf_s(sMsg, "FF%X", nAPP);
 				toRead = len - 2;
 				if ((bufSize - next) > toRead)
 				{
@@ -431,7 +430,7 @@ void TIFFfile::fileLoad()
 
 			case 0xC4:	// DHT
 				printf("\t[FF%X] Define Huffman Table\n", nAPP);
-				sprintf_s(sMsg, "[FF%X]", nAPP);
+				sprintf_s(sMsg, "FF%X", nAPP);
 				toRead = len - 2;
 				if ((bufSize - next) > toRead)
 				{
@@ -459,7 +458,7 @@ void TIFFfile::fileLoad()
 				// just skip all data until FFD9
 				printf("\t[FFDA]\n");
 				printf("\t[FF%X] header lentgh is %d (0x%04X) bytes\n", nAPP, len, len);
-				sprintf_s(sMsg, "[FF%X]", nAPP);
+				sprintf_s(sMsg, "FF%X", nAPP);
 				toRead = len - 2;
 				if ((bufSize - next) > toRead)
 				{
@@ -485,7 +484,7 @@ void TIFFfile::fileLoad()
 			case 0xDB:	// FFDB
 				printf("\t[FFDB]\n");
 				printf("\t[FF%X] segment lentgh is %d (0x%04X) bytes\n", nAPP, len, len);
-				sprintf_s(sMsg, "[FF%X]", nAPP);
+				sprintf_s(sMsg, "FF%X", nAPP);
 				toRead = len - 2;
 				if ((bufSize - next) > toRead)
 				{
@@ -514,12 +513,12 @@ void TIFFfile::fileLoad()
 				if ((bufSize - next) > toRead)
 				{
 					base = next - 4;
-					memcpy(&jfif, buffer + next, toRead);
+  					memcpy(&jfif, buffer + next, toRead);
 
 					dumpAPP0(base);
-					updateHighestOffset(base + toRead + 4 - 1);
-					logThis(	{ "[FFE0]", base, (toRead+4), "APP0 JFIF Mandatory marker" }, ""	);
-					next = next + toRead - 1;
+					updateHighestOffset(base + 16 + 2);
+					logThis(	{ "FFE0", base, (toRead+4), "APP0 JFIF Mandatory marker" }, ""	);
+					next = base + 16 + 2 - 1;
 					st = 0;	
 				}
 				else
@@ -533,38 +532,40 @@ void TIFFfile::fileLoad()
 				toRead = len - 2;
 				if ((bufSize - next) > toRead)
 				{
+					// where are we?
+					sprintf_s( sMsg, "FFE1 length is 0x%X (%d)", len, len);
+					dumpFrom(sMsg, 40, buffer + next);
 					ifdSet.offsetBase = next + 6;	// global offset after Exif\0\0
-					base = next - 4;
 					memcpy(&exif, buffer + next, 6);
-					next += 6;
+					next += 6;	// Exif\0\0
 					memcpy(&exif.endian, buffer + next, 2);
 					next += 2;
 					memcpy(&exif.aa, buffer + next, 2);
 					next += 2;
-					memcpy(&offset, buffer + next, 4);
+					memcpy(&exif.offset, buffer + next, 4);
 					next += 4;
-					exif.offset = offset;
-					dumpEXIF(base);
-					updateHighestOffset(next + 1);
-					logThis( { "FFE1", base, (next-base), "APP1 EXIF marker" }, ""	);
-					// now push this into a new IFD into set of IFDs
-					currentIFD = getNewIFD(& ifdSet, (offset + ifdSet.offsetBase));
+					offset = exif.offset;
+					dumpEXIF(ifdSet.offsetBase - 6 - 4);
+					updateHighestOffset(next);
+					logThis( { "FFE1", ifdSet.offsetBase - 6 - 4, len + 2, "APP1 EXIF marker" }, ""	);
+					currentIFD = getNewIFD(& ifdSet, 0);	// IFD0
 					// pointing now to first byte of ifd field count. must go back one
 					// byte before returning to loop
 					next -= 1;
 					st = 6;
+					break;
 				}
 				else
 				{
 					// something went wrong. may need to read more data int buffer
 					st = 15;
+					break;
 				}
-				break;
 
 			default:
 				// fixed length segment, not APP0, not APP1
 				printf("\t[FF%X] segment lentgh is %d (0x%04X) bytes\n", nAPP, len, len);
-				sprintf_s( sMsg, "[FF%X]", nAPP);
+				sprintf_s( sMsg, "FF%X", nAPP);
 				toRead = len - 2;
 				if ((bufSize - next) > toRead)
 				{
@@ -594,88 +595,58 @@ void TIFFfile::fileLoad()
 			break;
 
 		case 6:
-			//
-			// here we are pointing to the IFD field count
-			// confirm position
-			sprintf_s(sMsg, "***** pointing to start of IFD%d *****", currentIFD->index );
-			dumpFrom( sMsg, 40, buffer + next);
-			memcpy(	&nEntries,	(buffer + next), 2 );
-			fileStatus();
-			(*currentIFD).entries = nEntries;
-			(*currentIFD).address = next;
-			nIFD = (*currentIFD).index;
-			sprintf_s(	sMsg, "IFD%d", nIFD	);
-			sprintf_s(	sValue,	"Image File Directory IFD%d, %d fields", nIFD, nEntries	);
-			logThis( { sMsg, next, (uint32_t)(2 + (12 * nEntries) + 4), sValue }, "");
-			next += 2;
-			// now we are pointing to the Field Array
-			// nEntries 12-byte fields
-			// create a first field, blank
-			for (
-				int i = 0;
-				i < nEntries;
-				i++)
+			offset = processIFD();
+			if (currentIFD->origin == 0x8769)
 			{
-				// build field record
-				tempField.nextField = nullptr;
-				memcpy(&tempField.tag,		buffer + next,     2);		// tag
-				memcpy(&tempField.type,		buffer + next + 2, 2);	// type
-				memcpy(&tempField.count,	buffer + next + 4, 4);	// count
-				memcpy(&tempField.offset,	buffer + next + 8, 4);	// offset
-				sprintf_s(sMsg, "#%d/%d", i + 1, nEntries);
-				sprintf_s(
-					sValue,
-					"At 0x%X: Tag 0x%X, Type 0x%X, Count 0x%X, Offset 0x%X",
-					((*currentIFD).address + 2 + (12 * i)),
-					tempField.tag,
-					tempField.type,
-					tempField.count,
-					tempField.offset
-				);
-				// insert into FieldList;
-				ifdSet.insertField(tempField, currentIFD);
-				logThis({ sMsg, base, 12, sValue }, "");
-				next += 12;
-			}	// end for
-			// now we are at the 4-byte next IFD offset value
-			//dumpFrom( "offset?", 10, buffer+next);
-			memcpy(	& offset, buffer + next, 4);
-			currentIFD->nextIFDoffset = offset;
-			next += 4;
-			printf("\tofset is 0x%X (%d) next IFD at 0x%X (%d)\n",
-				offset,
-				offset,
-				ifdSet.offsetBase + offset,
-				ifdSet.offsetBase + offset
-				);
-			updateHighestOffset(next + 1);
-			//dumpIFDset(&ifdSet);
-			// next IFD or back to scan?
-			if (offset != 0)
-			{
-				// another IFD follows
-				currentIFD = getNewIFD(&ifdSet, (offset + ifdSet.offsetBase));	// prepare new IFD
-				next = (ifdSet.offsetBase + offset) -1;
-				st = 6;
-			}
-			else
-			{
+				sprintf_s(sMsg, "st 6 @ 0x%X", next);
+				logThis({ sMsg, 0, 0, "0x8769 Exif IFD" }, "");
 				next -= 1;
 				st = 7;
-			}
+				break;
+			};
+			if (currentIFD->origin == 0x8825)
+			{
+				sprintf_s(sMsg, "st 6 @ 0x%X", next);
+				logThis({ sMsg, 0, 0, "0x8825 GPS IFD" }, "");
+				next -= 1;
+				st = 7;
+				break;
+			};
+			if (currentIFD->origin == 0xA005)
+			{
+				sprintf_s(sMsg, "st 6 @ 0x%X", next);
+				logThis({ sMsg, 0, 0, "0xA0005 InterOp IFD" }, "");
+				next -= 1;
+				st = 7;
+				break;
+			};
+			if (offset == 0)
+			{
+				sprintf_s(sMsg, "st 6 last IFD");
+				logThis({ sMsg, 0, 0, "Last IFD in chain" }, "");
+				next -= 1;
+				st = 7;
+				break;
+			};
+			currentIFD = getNewIFD(&ifdSet, (offset + ifdSet.offsetBase));	// prepare new IFD
+			next = (ifdSet.offsetBase + offset) - 1;
+			st = 6;
 			break;
 
 		case 7:
 			// after IFD list process
 			// time to scan fields and look for possible new included IFD
-			// get next IFD marked as not processed
+			// first, get next IFD marked as not processed
+
+			// where are we?
+			dumpFrom("***** state 7 *****", 40, buffer+next);
 			found = false;
 			pIFD = ifdSet.ifd;	// point to IFD0
 			while (true)
 			{
 				if (!(pIFD->processed))
 				{
-					found = true;
+					found = true;	// 1st not processed
 					break;
 				}
 				else
@@ -699,10 +670,11 @@ void TIFFfile::fileLoad()
 			}
 			// process this one;
 			currentIFD = pIFD;
-			printf( "\n\t***** next IFD to process is IFD%d *****\n", currentIFD->index);
+			printf( "\n\t***** next IFD is IFD%d *****\n", currentIFD->index);
 			if (currentIFD->entries == 0)
 			{
-				// an empty IFD here means that we are pointing to an special IFD
+				// an empty IFD here means that we are pointing to 
+				// an special IFD found before
 				// and must fill in the data into the Field Array
 				// state 6
 				printf(
@@ -736,11 +708,7 @@ void TIFFfile::fileLoad()
 			} while (pField != nullptr);
 
 			currentIFD->processed = true;
-			dumpIFDset(&ifdSet);
-			printf(
-				"\tCurrent IFD is IFD%d\n",
-				currentIFD->index
-			);
+			//dumpIFDset(&ifdSet);
 			next -= 1;
 			// done with this IFD
 			break;
@@ -756,7 +724,9 @@ void TIFFfile::fileLoad()
 
 void TIFFfile::fileStatus(){
 	printf(
-		"\tFile in disk: %s\n", diskFile.c_str()
+		"\n\tfileStatus(%s):\t***** # of log entries is %d *****\n",
+		diskFile.c_str(),
+		log.size()
 	);
 	printf(
 		"\tbuffer capacity: %d\n", bufSize
@@ -765,7 +735,7 @@ void TIFFfile::fileStatus(){
 		"\tPointer at: %d\n", next
 	);
 	printf(
-		"\t# of log entries is %d\n",
+		"\n\tfileStatus:\t***** # of log entries is %d *****\n",
 		log.size()
 	);
 	for (vector<fileLog>::iterator it = log.begin(); it != log.end(); it++)
@@ -780,6 +750,8 @@ void TIFFfile::fileStatus(){
 			it->name.c_str()
 		);
 	}
+	printf(
+		"\n\tfileStatus:\t***** end of log *****\n\n\n");
 	return;
 }	// end fileStatus()
 
@@ -792,12 +764,13 @@ IFD * TIFFfile::getNewIFD(IFDlist * l, uint32_t offset)
 	IFD * p;
 	// create new record
 	p = (IFD *)::operator new(sizeof(IFD));
-	p->index = -1;	// invalidate
+	p->index = 0;	// invalidate
 	p->processed = false;
 	p->address = offset;
 	p->entries = 0;
 	p->nextIFDoffset = 0;
 	p->nextIFD = nullptr;
+	p->origin = 0;
 	p->fieldList = nullptr;
 	p = l->insertIFD(*p, l);	// now get index
 	return p;
@@ -857,7 +830,7 @@ void TIFFfile::processField(
 	uint32_t	n32a{};
 	uint32_t	n32b{};
 
-	IFD			localIFD;
+	IFD	*		pIFD;
 
 	sprintf_s(
 		sMsg, "Field %d of %d at address 0x%X, offset 0x%X", n, t, address, globalOffset
@@ -940,16 +913,8 @@ void TIFFfile::processField(
 			);
 			logThis({ sMsg, 0, 0, sValue },	"8769");
 			// set up a new IFD to run this
-			localIFD.address = field.offset;
-			localIFD.entries = 0;
-			localIFD.fieldList = nullptr;
-			localIFD.index = 0;
-			localIFD.nextIFDoffset = 0;
-			localIFD.processed = false;
-			localIFD.nextIFD = 0;
-			localIFD.lastField = nullptr;
-			ifdSet.insertIFD(localIFD, &ifdSet);
-			//
+			pIFD = getNewIFD(&ifdSet, field.offset);
+			pIFD->origin = 0x8769; // sign to not search for next in IFD chain
 		}
 		else
 		{
@@ -965,15 +930,8 @@ void TIFFfile::processField(
 				);
 				logThis({ sMsg, 0, 0, sValue },	"A005");
 				// this is all for now
-				localIFD.address = field.offset;
-				localIFD.entries = 0;
-				localIFD.fieldList = nullptr;
-				localIFD.index = 0;
-				localIFD.nextIFDoffset = 0;
-				localIFD.processed = false;
-				localIFD.nextIFD = 0;
-				localIFD.lastField = nullptr;
-				ifdSet.insertIFD(localIFD, &ifdSet);
+				pIFD = getNewIFD(&ifdSet, field.offset);
+				pIFD->origin = 0xA005; // sign to not search for next in IFD chain
 			}
 			else
 			{
@@ -1062,6 +1020,87 @@ void TIFFfile::processField(
 
 }	// end processField()
 
+uint32_t TIFFfile::processIFD()
+{
+	short		nIFD;
+	int			nEntries;
+	uint32_t	offset;
+	char		sMsg[80];
+	char		sValue[80];
+	IFDfield	tempField;
+
+	//
+	// here we are pointing to the IFD field count
+	// confirm position
+
+	sprintf_s(sMsg, "IFD%d", currentIFD->index);
+	dumpFrom(sMsg, 40, buffer + next);
+	sprintf_s(sValue, "processIFD%d, next @0x%X", currentIFD->index, next);
+	logThis({ sMsg, 0, 0, sValue }, "");
+	memcpy(&b16, (buffer + next), 2);
+	nEntries = b16;
+	(*currentIFD).entries = nEntries;
+	(*currentIFD).address = next;
+	uint32_t base = next;
+	next += 2;
+	nIFD = (*currentIFD).index;
+
+	sprintf_s(sMsg, "IFD%d", nIFD);
+	sprintf_s(sValue, "Image File Directory IFD%d, %d fields", nIFD, nEntries);
+	logThis({ sMsg, (next - 2), (uint32_t)(2 + (12 * nEntries) + 4), sValue }, "");
+
+	// now we are pointing to the Field Array
+	// nEntries 12-byte fields
+	// create a first field, blank
+	currentIFD->fieldList = nullptr;
+	for (
+		int i = 0;
+		i < nEntries;
+		i++)
+	{
+		// build field record
+		tempField.nextField = nullptr;
+		memcpy(&tempField.tag, buffer + next, 2);		// tag
+		memcpy(&tempField.type, buffer + next + 2, 2);	// type
+		memcpy(&tempField.count, buffer + next + 4, 4);	// count
+		memcpy(&tempField.offset, buffer + next + 8, 4);	// offset
+		sprintf_s(sMsg, "#%d/%d", i + 1, nEntries);
+		sprintf_s(
+			sValue,
+			"At 0x%X: Tag 0x%X, Type 0x%X, Count 0x%X, Offset 0x%X",
+			((*currentIFD).address + 2 + (12 * i)),
+			tempField.tag,
+			tempField.type,
+			tempField.count,
+			tempField.offset
+		);
+		// insert into FieldList;
+		ifdSet.insertField(tempField, currentIFD);
+		logThis({ sMsg, base, 12, sValue }, "");
+		next += 12;
+	}	// end for
+	// now we are at the 4-byte next IFD offset value
+	//dumpFrom( "offset?", 10, buffer+next);
+	memcpy(&offset, buffer + next, 4);
+	currentIFD->nextIFDoffset = offset;
+	next += 4;
+	printf("\tofset is 0x%X (%d) next IFD at 0x%X (%d)\n",
+		offset,
+		offset,
+		ifdSet.offsetBase + offset,
+		ifdSet.offsetBase + offset
+	);
+	updateHighestOffset(next - 1);
+	//dumpIFDset(&ifdSet);
+	// next IFD or back to scan?
+	return (offset);
+}	// end processIFD()
+
+
+
+
+
+
 void TIFFfile::testList(IFDlist * list)
 {
 	IFD			ifd;
@@ -1083,6 +1122,7 @@ void TIFFfile::testList(IFDlist * list)
 	ifd.index = 0;
 	ifd.nextIFD = nullptr;
 	ifd.nextIFDoffset = 0;
+	ifd.origin = 0;
 	ifd.processed = false;
 
 	// builds a new field

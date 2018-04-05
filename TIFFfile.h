@@ -82,11 +82,14 @@ public:
 	void logThis(fileLog l, string comment);
 
 	void processField(
-		 IFDfield,
-		 uint32_t, 
-		 uint32_t, 
-		 uint16_t,
-		 uint16_t);
+		IFDfield,
+		uint32_t,
+		uint32_t,
+		uint16_t,
+		uint16_t);
+
+
+	uint32_t processIFD();
 
 	void testList(IFDlist *);
 
@@ -122,13 +125,13 @@ private:
 	JFIF				jfif;
 	EXIF				exif;
 
-	IFD *				pIFD;
-	IFD *				currentIFD;
+	IFD *			pIFD;
+	IFD *			currentIFD;
 
 	uint16_t		b16{};
 	uint32_t		b32{};
 	uint64_t		b64{};
 
-	bool				lsbFirst;
+	bool			lsbFirst;
 };
 
