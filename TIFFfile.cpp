@@ -1,3 +1,4 @@
+
 #include "stdafx.h"
 #include "TIFFfile.h"
 
@@ -639,7 +640,7 @@ void TIFFfile::fileLoad()
 			// first, get next IFD marked as not processed
 
 			// where are we?
-			dumpFrom("***** state 7 *****", 40, buffer+next);
+			//dumpFrom("***** state 7 *****", 40, buffer+next);
 			found = false;
 			pIFD = ifdSet.ifd;	// point to IFD0
 			while (true)
@@ -678,7 +679,7 @@ void TIFFfile::fileLoad()
 				// and must fill in the data into the Field Array
 				// state 6
 				printf(
-					"\tIFD %d at 0x%X is empty\n",
+					"\tIFD %d at 0x%X is empty: will scan for fields\n",
 					currentIFD->index,
 					currentIFD->address
 				);
@@ -695,6 +696,11 @@ void TIFFfile::fileLoad()
 			next = currentIFD->address + 2;
 			pField = currentIFD->fieldList;	// 1st field
 			n = 1;
+			printf(
+				"\t***** building fields for IFD %d at 0x%X\n",
+				currentIFD->index,
+				currentIFD->address
+			);
 			do
 			{
 				processField(
@@ -706,6 +712,12 @@ void TIFFfile::fileLoad()
 				pField = pField->nextField;
 				n += 1;
 			} while (pField != nullptr);
+			printf(
+				"\t***** %d fields for IFD %d at 0x%X\n",
+				currentIFD->entries,
+				currentIFD->index,
+				currentIFD->address
+			);
 
 			currentIFD->processed = true;
 			//dumpIFDset(&ifdSet);
@@ -867,28 +879,82 @@ void TIFFfile::processField(
 
 	switch (field.type)
 	{
+	case 1:
+		// BYTE 8-bit unsigned
+		pField = new char[field.count];
+		// if we have no more than 4 bytes, content is written inline
+		if (field.count <= 4)
+		{
+			memcpy(pField, &field.offset, 4);
+		}
+		else
+		{
+			// or we have then at the offset
+			for (unsigned int i = 0; i < field.count; i++)
+			{
+				*(pField + i) = *(buffer + globalOffset + field.offset + i);
+			}
+			updateHighestOffset(globalOffset + field.offset + field.count - 1);
+		}
+		s = sValue;
+		if (field.tag == 0x0)	// TAG 0 is GPS Version Tag
+		{
+			sprintf_s(sValue, "GPSInfo tag is [%c.%c.%c.%c]",
+				(char)(*(pField + 0) + 48),
+				(char)(*(pField + 1) + 48),
+				(char)(*(pField + 2) + 48),
+				(char)(*(pField + 3) + 48)
+			);
+			logThis({ sMsg, 0, 0, sValue }, "GPSInfo tag");
+		}
+		updateHighestOffset(globalOffset + field.offset + field.count - 1);
+		delete pField;
+		break;
+
 	case 2:
 		// ASCII
 		pField = new char[field.count];
-		for (unsigned int i = 0; i < field.count; i++)
+		// if we have no more than 4 bytes, content is written inline
+		if (field.count <= 4)
 		{
-			*(pField + i) = *(buffer + globalOffset + field.offset + i);
+			memcpy(pField, &field.offset, 4);
+			*(pField + 4) = 0;
 		}
-		sprintf_s( sValue, "[2], value is [%s]", pField);
+		else
+		{
+			for (unsigned int i = 0; i < field.count; i++)
+			{
+				*(pField + i) = *(buffer + globalOffset + field.offset + i);
+			}
+			updateHighestOffset(globalOffset + field.offset + field.count - 1);
+		}
+		sprintf_s(sValue, "[ASCII], value is [%s]", pField);
 		s = sValue;
 		if (field.tag == 0xA420)	// ImageUniqueID seems to have a padding byte
 		{
 			field.count = field.count + 1;
 			//printf("\t0xA420: Extra byte included after image id\n");
 		}
-		updateHighestOffset(globalOffset + field.offset + field.count - 1);
+		else
+		{
+			if (field.tag == 0x1)
+			{
+				// TAG 1 is GPSLatitudeRef
+				printf(
+					"\tGPS Latitude Reference is %s\n",
+					sValue
+				);
+			}
+		}
+
+
 		delete pField;
 		break;
 
 	case 3:
 		// unsigned short, 2 bytes
 		n16 = field.offset;
-		sprintf_s(sValue, "type 3, value is %d [0x%X]", n16, n16);
+		sprintf_s(sValue, "type 3 (unsigned short), value is %d [0x%X]", n16, n16);
 		logThis( { sMsg, 0, 0, sValue }, "");
 		break;
 
@@ -903,7 +969,7 @@ void TIFFfile::processField(
 		logThis({ sMsg, 0, 0, sValue },	"");
 		if (field.tag == 0x8769)	// Exif IFD
 		{
-			dumpFrom("Start of new IFD", 40, buffer + field.offset + globalOffset);
+			dumpFrom("Start of Exif IFD", 40, buffer + field.offset + globalOffset);
 			sprintf_s(
 				sValue,
 				"TAG %X Exif IFD. offset is 0x%X. Address in disk is 0x%X",
@@ -920,7 +986,7 @@ void TIFFfile::processField(
 		{
 			if (field.tag == 0xA005)	// Interoperability IFD
 			{
-				dumpFrom("Field A005", 12, buffer + address);
+				dumpFrom("Start of Interop IFD", 40, buffer + field.offset + globalOffset);
 				sprintf_s(
 					sValue,
 					"TAG %X Interop IFD. offset is 0x%X. Address in disk is 0x%X",
@@ -935,21 +1001,45 @@ void TIFFfile::processField(
 			}
 			else
 			{
-				// no 0x8769 or 0xA005, just go on
+				if (field.tag == 0x8825)	// Interoperability IFD
+				{
+					dumpFrom("Start of GPS IFD", 40, buffer + field.offset + globalOffset);
+					sprintf_s(
+						sValue,
+						"TAG %X GPS IFD. offset is 0x%X. Address in disk is 0x%X",
+						field.tag,
+						field.offset,
+						field.offset + globalOffset
+					);
+					logThis({ sMsg, 0, 0, sValue }, "8825");
+					// this is all for now
+					pIFD = getNewIFD(&ifdSet, field.offset);
+					pIFD->origin = 0x8825; // sign to not search for next in IFD chain
+				}
 			}
 		}
 		break;
 
 	case 5:
-		// rational: A/B
-		memcpy(&n32a, buffer + globalOffset + field.offset, 4);
-		memcpy(&n32b, buffer + globalOffset + field.offset+4, 4);
+		// rational: A/B/C...
 		sprintf_s(
-			sValue, "Type 5, A/B = (%d/%d) [0x%X/0x%X] Count is %d",
-			n32a, n32b, n32a, n32b,
+			sValue, "Type 5, count is %d (0x%x)",
+			field.count,
 			field.count
 		);
-		updateHighestOffset(globalOffset + field.offset + 8 - 1);
+		for (unsigned int i = 0; i < field.count; i++)
+		{
+			memcpy(&n32a, buffer + globalOffset + field.offset + 4*i, 4);
+			sprintf_s(
+				sValue,
+				"%s %c = 0x%X (%d) ",
+				sValue,
+				(char)(65+i),
+				n32a,
+				n32a
+			);
+		}
+		updateHighestOffset(globalOffset + field.offset + (4*field.count) - 1);
 		logThis({ sMsg, (globalOffset + field.offset), 8, sValue },	"");
 		break;
 
@@ -1035,7 +1125,7 @@ uint32_t TIFFfile::processIFD()
 
 	sprintf_s(sMsg, "IFD%d", currentIFD->index);
 	dumpFrom(sMsg, 40, buffer + next);
-	sprintf_s(sValue, "processIFD%d, next @0x%X", currentIFD->index, next);
+	sprintf_s(sValue, "processIFD%d, next @0x%X origin is 0x%X", currentIFD->index, next, currentIFD->origin);
 	logThis({ sMsg, 0, 0, sValue }, "");
 	memcpy(&b16, (buffer + next), 2);
 	nEntries = b16;
@@ -1084,12 +1174,6 @@ uint32_t TIFFfile::processIFD()
 	memcpy(&offset, buffer + next, 4);
 	currentIFD->nextIFDoffset = offset;
 	next += 4;
-	printf("\tofset is 0x%X (%d) next IFD at 0x%X (%d)\n",
-		offset,
-		offset,
-		ifdSet.offsetBase + offset,
-		ifdSet.offsetBase + offset
-	);
 	updateHighestOffset(next - 1);
 	//dumpIFDset(&ifdSet);
 	// next IFD or back to scan?
