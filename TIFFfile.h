@@ -11,6 +11,8 @@
 #include <memory>
 #include <inttypes.h>
 #include "IFDlist.h"
+#include "Tags.h"
+#include "TagMeans.h"
 
 using namespace std;
 
@@ -91,7 +93,15 @@ public:
 
 	uint32_t processIFD();
 
+	// test of dictionary of tags
+	void testDict(IFDlist *);
+
+	// test link structure
+	void testLinks(IFDlist *);
+
+	// test navigation in structure
 	void testList(IFDlist *);
+
 
 	void updateHighestOffset(uint32_t);
 

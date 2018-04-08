@@ -249,37 +249,6 @@ void TIFFfile::fileLoad()
 	uint16_t		nEntries{};
 	bool			found = false;
 
-	//dumpFrom("buffer at start", 40, (unsigned char *) buffer);
-
-	//
-	//
-	/*
-	testList(&ifdSet);
-	printf("\n\n***** after testList() *****\n\n");
-	printf(
-		"\tIFD count is %d, Global offset is 0x%X (%d)\n\n",
-		ifdSet.ifdCount,
-		ifdSet.offsetBase,
-		ifdSet.offsetBase
-	);
-	pIFD = ifdSet.ifd;
-	for (int n = 0; n < ifdSet.ifdCount; n++)
-	{
-		printf(
-			"\tIFD%d: %d entries. address 0x%X, index is %d\n",
-			n,
-			pIFD->entries,
-			pIFD->address,
-			pIFD->index
-		);
-		pIFD = pIFD->nextIFD;
-	};
-	dumpIFDset(&ifdSet);
-	exit(0);*/
-	
-	//
-	//
-
 	next = 0;
 	lastAccessed = 0;
 	highestAccessed = 0;
@@ -720,12 +689,12 @@ void TIFFfile::fileLoad()
 			);
 
 			currentIFD->processed = true;
-			//dumpIFDset(&ifdSet);
 			next -= 1;
 			// done with this IFD
 			break;
 
 		case 15:
+			dumpIFDset(&ifdSet);
 			break;
 
 		default:
@@ -1180,10 +1149,57 @@ uint32_t TIFFfile::processIFD()
 	return (offset);
 }	// end processIFD()
 
+void TIFFfile::testDict(IFDlist *)
+{
+	uint16_t	t;
+	FieldDict	field;
+	TagMeans	dict;
 
+	do
+	{
+		// get a key from user and search for that
+		cout << "tag (decimal): ";
+		cin >> t;
+		cout << endl << "tag is " << t << endl;
+		if( ! dict.explainTag( t, field))
+		{
+			cout << endl << "tag " << t << " was not found " << endl;
+			continue;
+		}
+		// that was found
+		// dict.printTag(field);
+	} while (t != 9999);
+	// at the end dump them all
+	dict.print();
+}	// end testDict()
 
-
-
+void TIFFfile::testLinks(IFDlist *)
+{
+	//
+	// this is just a test to build and navigate a field list
+	// built at testList()
+	//
+	testList(&ifdSet);
+	printf("\n\n***** after testList() *****\n\n");
+	printf(
+	"\tIFD count is %d, Global offset is 0x%X (%d)\n\n",
+	ifdSet.ifdCount,
+	ifdSet.offsetBase,
+	ifdSet.offsetBase
+	);
+	pIFD = ifdSet.ifd;
+	for (int n = 0; n < ifdSet.ifdCount; n++)
+	{
+	printf(
+	"\tIFD%d: %d entries. address 0x%X, index is %d\n",
+	n,
+	pIFD->entries,
+	pIFD->address,
+	pIFD->index
+	);
+	pIFD = pIFD->nextIFD;
+	};
+}	// end testLinks()
 
 void TIFFfile::testList(IFDlist * list)
 {
